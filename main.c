@@ -156,6 +156,7 @@ void ProcessInput(HWND hwnd) {
     keyIsPress = keyWasPress;
 }
 void RenderFrame(HWND hwnd) {
+    char str[64] = { 0 };
     Pixel pixel = { 0xFF, 0, 0, 0 };
     Pixel* bitmapMemory = (Pixel*)Bitmap.Memory;
     for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
@@ -166,7 +167,6 @@ void RenderFrame(HWND hwnd) {
     StretchDIBits(graphicsContext, 0, 0, MonitorData.MonitorWidth, MonitorData.MonitorHeight, 0, 0,
         SCREEN_WIDTH, SCREEN_HEIGHT, Bitmap.Memory, &Bitmap.bmpInfo, DIB_RGB_COLORS, SRCCOPY);
     if (MonitorData.DebugInformationAboutFPS) {
-        char str[64] = { 0 };
         sprintf_s(str, sizeof(str), "AVG FPS Raw: %.01f\n", MonitorData.FpsAveragePerSecond);
         TextOutA(graphicsContext, 0, 0, str, (int)strlen(str));
 
