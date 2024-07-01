@@ -5,11 +5,11 @@
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     HWND hwnd = NULL;
-    int64_t elapsedMicroseconds = 0;
-    int64_t rawElapsedMicrosecondsAccumulator = 0;
-    int64_t cookedElapsedMicrosecondsAccumulator = 0;
-    int64_t startTime = 0;
-    int64_t endTime = 0;
+    int64_t ElapsedMicroseconds = 0;
+    int64_t RawElapsedMicrosecondsAccumulator = 0;
+    int64_t CookedElapsedMicrosecondsAccumulator = 0;
+    int64_t StartTimeFrame = 0;
+    int64_t EndTimeFrame = 0;
     WNDCLASSEXW windowClass = { 0 };
     windowClass.cbSize = sizeof(WNDCLASSEX);
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
@@ -28,9 +28,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
         goto error;
     }
 
-    hwnd = CreateWindowExW(0, CLASS_NAME, L"Learn to Program Windows", WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, SCREEN_WIDTH, SCREEN_HEIGHT,
-        NULL, NULL, hInstance, NULL);
+    hwnd = CreateWindowExW(0, 
+                  CLASS_NAME, 
+ L"Learn to Program Windows", 
+         WS_OVERLAPPEDWINDOW,
+               CW_USEDEFAULT,
+               CW_USEDEFAULT,         
+                SCREEN_WIDTH,                
+               SCREEN_HEIGHT,
+                        NULL,          
+                        NULL,       
+                   hInstance,             
+                       NULL);
     if (hwnd == NULL) {
         MessageBoxA(NULL, "Create window failed!!!", "ERROR", MB_OK);
         goto error;
@@ -40,7 +49,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     UpdateWindow(hwnd);
 
     //Get NtQueryTimerResolution from ntdll
-    if ((NtDll = GetModuleHandleA("ntdll.dll")) == 0) {
+    if ((NtDll = GetModuleHandleA("ntdll.dll")) == NULL) {
         MessageBoxA(NULL, "ntdll file cant find!!!", "ERROR", MB_OK);
         goto error;
     }
@@ -49,6 +58,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
         MessageBoxA(NULL, "NtQueryTimerResolution cant find!!!", "ERROR", MB_OK);
         goto error;
     }
+    NtQueryTimerResolution(&MonitorData.MinimumTimerResolution,
+                           &MonitorData.MaximumTimerResolution,
+                           &MonitorData.CurrentTimerResolution);
 
 
     Bitmap.bmpInfo.bmiHeader.biSize = sizeof(Bitmap.bmpInfo.bmiHeader);
@@ -82,7 +94,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     }
     QueryPerformanceFrequency(&MonitorData.Frequency);
     while (isRunning == TRUE) {
-        QueryPerformanceCounter((LARGE_INTEGER*)&startTime);
+        QueryPerformanceCounter((LARGE_INTEGER*)&StartTimeFrame);
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -90,33 +102,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
 
         ProcessInput(hwnd);
         RenderFrame(hwnd);
-        QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
+        QueryPerformanceCounter((LARGE_INTEGER*)&EndTimeFrame);
 
-        elapsedMicroseconds = endTime - startTime;
-        elapsedMicroseconds *= 1000000;
-        elapsedMicroseconds /= MonitorData.Frequency.QuadPart;
+        ElapsedMicroseconds = EndTimeFrame - StartTimeFrame;
+        ElapsedMicroseconds *= 1000000;
+        ElapsedMicroseconds /= MonitorData.Frequency.QuadPart;
         MonitorData.TotalFramesFutherTarget++;
 
-        rawElapsedMicrosecondsAccumulator += elapsedMicroseconds;
+        RawElapsedMicrosecondsAccumulator += ElapsedMicroseconds;
 
-        while (elapsedMicroseconds <= TARGET_MICROSECONDS) {
-            Sleep(1);
-            elapsedMicroseconds = endTime - startTime;
-            elapsedMicroseconds *= 1000000;
-            elapsedMicroseconds /= MonitorData.Frequency.QuadPart;
-            QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
+        while (ElapsedMicroseconds <= TARGET_MICROSECONDS) {
+            ElapsedMicroseconds = EndTimeFrame - StartTimeFrame;
+            ElapsedMicroseconds *= 1000000;
+            ElapsedMicroseconds /= MonitorData.Frequency.QuadPart;
+            QueryPerformanceCounter((LARGE_INTEGER*)&EndTimeFrame);
+            if (ElapsedMicroseconds <= (TARGET_MICROSECONDS - MonitorData.CurrentTimerResolution)) {
+                Sleep(1);
+            }
         }
 
-        cookedElapsedMicrosecondsAccumulator += elapsedMicroseconds;
+        CookedElapsedMicrosecondsAccumulator += ElapsedMicroseconds;
 
         if ((MonitorData.TotalFramesFutherTarget % TARGET_FPS) == 0) {
-            MonitorData.FpsAveragePerSecond = 1.0f / ((rawElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
-            MonitorData.FpsAverageCookedPerSecond = 1.0f / ((cookedElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
+            MonitorData.FpsAveragePerSecond = 1.0f / ((RawElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
+            MonitorData.FpsAverageCookedPerSecond = 1.0f / ((CookedElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
             char str[256] = { 0 };
             snprintf(str, sizeof(str),"AVG FPS Cooked: %.01f\tAVG FPS Raw: %.01f\n", MonitorData.FpsAverageCookedPerSecond, MonitorData.FpsAveragePerSecond);
             OutputDebugStringA(str);
-            rawElapsedMicrosecondsAccumulator = 0;
-            cookedElapsedMicrosecondsAccumulator = 0;
+            RawElapsedMicrosecondsAccumulator = 0;
+            CookedElapsedMicrosecondsAccumulator = 0;
         }
     }
 
@@ -172,6 +186,15 @@ void RenderFrame(HWND hwnd) {
 
         sprintf_s(str, sizeof(str), "FPS Cooked: %.01f\n", MonitorData.FpsAverageCookedPerSecond);
         TextOutA(graphicsContext, 0, 16, str, (int)strlen(str));
+
+        sprintf_s(str, sizeof(str), "Cur Timer Resolution: %.01f\n", MonitorData.CurrentTimerResolution/10000.0f);
+        TextOutA(graphicsContext, 0, 32, str, (int)strlen(str));
+
+        sprintf_s(str, sizeof(str), " Max Resolution: %.01f\n", MonitorData.MaximumTimerResolution / 10000.0f);
+        TextOutA(graphicsContext, 0, 48, str, (int)strlen(str));
+
+        sprintf_s(str, sizeof(str), "Min Resolution: %.01f\n", MonitorData.MinimumTimerResolution / 10000.0f);
+        TextOutA(graphicsContext, 0, 64, str, (int)strlen(str));
     }
   
 

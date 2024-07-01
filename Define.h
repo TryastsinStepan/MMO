@@ -27,6 +27,9 @@ typedef struct {
     BOOL DebugInformationAboutFPS;
     int MonitorWidth;
     int MonitorHeight;
+    LONG CurrentTimerResolution;
+    LONG MinimumTimerResolution;
+    LONG MaximumTimerResolution;
 } MONITORANDDATA;
 
 BOOL isRunning = TRUE;
