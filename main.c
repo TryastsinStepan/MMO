@@ -1,46 +1,8 @@
-#include <windows.h>
+#include"Define.h"
 #include <wchar.h>
 #include <stdio.h>
 #include <stdint.h>
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 600
-#define BITCOUNT 32
-#define GAME_MEMORY_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT * (BITCOUNT / 8))
-#define TARGET_FPS 100
-#define TARGET_MICROSECONDS 16667
-
-typedef struct {
-    BITMAPINFO bmpInfo;
-    void* memory;
-} BitmapGame;
-
-typedef struct {
-    unsigned char blue;
-    unsigned char green;
-    unsigned char red;
-    unsigned char alpha;
-} Pixel;
-
-typedef struct {
-    LARGE_INTEGER frequency;
-    float fpsAverage;
-    float fpsAverageCooked;
-    int totalFrames;
-    BOOL debuginfopress;
-} FPS;
-
-int isRunning = 1;
-int monitorWidth = 0;
-int monitorHeight = 0;
-
-LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-void ProcessInput(HWND hwnd);
-void RenderFrame(HWND hwnd);
-const wchar_t CLASS_NAME[] = L"SampleWindowClass";
-BitmapGame bitmapGame = { 0 };
-MONITORINFO monitorInfo = { 0 };
-FPS fps = { 0 };
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     HWND hwnd = NULL;
     int64_t elapsedMicroseconds = 0;
@@ -61,7 +23,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     windowClass.lpszMenuName = NULL;
     windowClass.lpszClassName = CLASS_NAME;
     windowClass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-    fps.debuginfopress=FALSE;
     if (RegisterClassExW(&windowClass) == 0) {
         MessageBoxA(NULL, "Register class failed!!!", "ERROR", MB_OK);
         goto error;
@@ -78,40 +39,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
 
-    bitmapGame.bmpInfo.bmiHeader.biSize = sizeof(bitmapGame.bmpInfo.bmiHeader);
-    bitmapGame.bmpInfo.bmiHeader.biWidth = SCREEN_WIDTH;
-    bitmapGame.bmpInfo.bmiHeader.biHeight = -SCREEN_HEIGHT; // Top-down DIB
-    bitmapGame.bmpInfo.bmiHeader.biPlanes = 1;
-    bitmapGame.bmpInfo.bmiHeader.biBitCount = BITCOUNT;
-    bitmapGame.bmpInfo.bmiHeader.biCompression = BI_RGB;
+    //Get NtQueryTimerResolution from ntdll
+    if ((NtDll = GetModuleHandleA("ntdll.dll")) == 0) {
+        MessageBoxA(NULL, "ntdll file cant find!!!", "ERROR", MB_OK);
+        goto error;
+    }
+    if ((NtQueryTimerResolution = (NTQUERYTIMERRESOLUTION)GetProcAddress(NtDll, "NtQueryTimerResolution")) == NULL)
+    {
+        MessageBoxA(NULL, "NtQueryTimerResolution cant find!!!", "ERROR", MB_OK);
+        goto error;
+    }
 
-    bitmapGame.memory = VirtualAlloc(NULL, GAME_MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (bitmapGame.memory == NULL) {
+
+    Bitmap.bmpInfo.bmiHeader.biSize = sizeof(Bitmap.bmpInfo.bmiHeader);
+    Bitmap.bmpInfo.bmiHeader.biWidth = SCREEN_WIDTH;
+    Bitmap.bmpInfo.bmiHeader.biHeight = -SCREEN_HEIGHT;
+    Bitmap.bmpInfo.bmiHeader.biPlanes = 1;
+    Bitmap.bmpInfo.bmiHeader.biBitCount = BITCOUNT;
+    Bitmap.bmpInfo.bmiHeader.biCompression = BI_RGB;
+    Bitmap.Memory = VirtualAlloc(NULL, GAME_MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (Bitmap.Memory == NULL) {
         MessageBoxA(hwnd, "Memory allocation failed!!!", "ERROR", MB_OK);
         goto error;
     }
 
-    monitorInfo.cbSize = sizeof(MONITORINFO);
-    if (GetMonitorInfoA(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &monitorInfo) == 0) {
+    MonitorInfo.cbSize = sizeof(MONITORINFO);
+    if (GetMonitorInfoA(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &MonitorInfo) == 0) {
         MessageBoxA(hwnd, "Can't find monitor!!!", "ERROR", MB_OK);
         goto error;
     }
 
-    monitorWidth = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
-    monitorHeight = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+    MonitorData.MonitorWidth = MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left;
+    MonitorData.MonitorHeight= MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top;
 
     if (SetWindowLongPtrA(hwnd, GWL_STYLE, (WS_OVERLAPPEDWINDOW | WS_VISIBLE) & ~WS_OVERLAPPEDWINDOW) == 0) {
         MessageBoxA(hwnd, "Set window style failed!!!", "ERROR", MB_OK);
         goto error;
     }
-    if (SetWindowPos(hwnd, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top, monitorWidth, monitorHeight, SWP_NOZORDER | SWP_FRAMECHANGED) == 0) {
+    if (SetWindowPos(hwnd, HWND_TOP, MonitorInfo.rcMonitor.left, MonitorInfo.rcMonitor.top, MonitorData.MonitorWidth, MonitorData.MonitorWidth, SWP_NOZORDER | SWP_FRAMECHANGED) == 0) {
         MessageBoxA(hwnd, "Set window position failed!!!", "ERROR", MB_OK);
         goto error;
     }
-
-    MSG msg = { 0 };
-    QueryPerformanceFrequency(&fps.frequency);
-    while (isRunning) {
+    QueryPerformanceFrequency(&MonitorData.Frequency);
+    while (isRunning == TRUE) {
         QueryPerformanceCounter((LARGE_INTEGER*)&startTime);
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
@@ -121,42 +91,43 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
         ProcessInput(hwnd);
         RenderFrame(hwnd);
         QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
+
         elapsedMicroseconds = endTime - startTime;
         elapsedMicroseconds *= 1000000;
-        elapsedMicroseconds /= fps.frequency.QuadPart;
-        fps.totalFrames++;
+        elapsedMicroseconds /= MonitorData.Frequency.QuadPart;
+        MonitorData.TotalFramesFutherTarget++;
+
         rawElapsedMicrosecondsAccumulator += elapsedMicroseconds;
+
         while (elapsedMicroseconds <= TARGET_MICROSECONDS) {
-            Sleep(0);
+            Sleep(1);
             elapsedMicroseconds = endTime - startTime;
             elapsedMicroseconds *= 1000000;
-            elapsedMicroseconds /= fps.frequency.QuadPart;
+            elapsedMicroseconds /= MonitorData.Frequency.QuadPart;
             QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
         }
+
         cookedElapsedMicrosecondsAccumulator += elapsedMicroseconds;
-        if ((fps.totalFrames % TARGET_FPS) == 0) {
-            float averageMicroseconds = rawElapsedMicrosecondsAccumulator / TARGET_FPS;
-            int64_t averageMicrosecondsCooked = cookedElapsedMicrosecondsAccumulator / TARGET_FPS;
-            fps.fpsAverage = 1.0f / ((averageMicroseconds / TARGET_FPS) * 0.000001f);
-            fps.fpsAverageCooked = 1.0f / ((averageMicrosecondsCooked / TARGET_FPS) * 0.000001f);
+
+        if ((MonitorData.TotalFramesFutherTarget % TARGET_FPS) == 0) {
+            MonitorData.FpsAveragePerSecond = 1.0f / ((rawElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
+            MonitorData.FpsAverageCookedPerSecond = 1.0f / ((cookedElapsedMicrosecondsAccumulator / TARGET_FPS) * 0.000001f);
             char str[256] = { 0 };
-            snprintf(str, sizeof(str),
-                "AVG millisec/frame: %.02f\tAVG FPS Cooked: %.01f\tAVG FPS Raw: %.01f\n",
-                averageMicroseconds, fps.fpsAverageCooked, fps.fpsAverage);
+            snprintf(str, sizeof(str),"AVG FPS Cooked: %.01f\tAVG FPS Raw: %.01f\n", MonitorData.FpsAverageCookedPerSecond, MonitorData.FpsAveragePerSecond);
             OutputDebugStringA(str);
             rawElapsedMicrosecondsAccumulator = 0;
             cookedElapsedMicrosecondsAccumulator = 0;
         }
     }
 
-    if (bitmapGame.memory) {
-        VirtualFree(bitmapGame.memory, 0, MEM_RELEASE);
+    if (Bitmap.Memory) {
+        VirtualFree(Bitmap.Memory, 0, MEM_RELEASE);
     }
     return 0;
 
 error:
-    if (bitmapGame.memory) {
-        VirtualFree(bitmapGame.memory, 0, MEM_RELEASE);
+    if (Bitmap.Memory) {
+        VirtualFree(Bitmap.Memory, 0, MEM_RELEASE);
     }
     return -1;
 }
@@ -165,7 +136,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
     switch (uMsg) {
     case WM_DESTROY:
         PostQuitMessage(0);
-        isRunning = 0;
+        isRunning = FALSE;
         return 0;
     default:
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -174,34 +145,32 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 }
 
 void ProcessInput(HWND hwnd) {
-    short keyWasPress;
+   static short keyWasPress;
     short keyIsPress = GetAsyncKeyState(VK_F12);
     if (GetAsyncKeyState(VK_ESCAPE)) {
         SendMessageA(hwnd, WM_CLOSE, 0, 0);
     }
-    if (keyIsPress ) {
-        fps.debuginfopress = !fps.debuginfopress;
+    if (keyIsPress&&!keyWasPress ) {
+        MonitorData.DebugInformationAboutFPS = !MonitorData.DebugInformationAboutFPS;
     }
+    keyIsPress = keyWasPress;
 }
 void RenderFrame(HWND hwnd) {
     Pixel pixel = { 0xFF, 0, 0, 0 };
-    Pixel* bitmapMemory = (Pixel*)bitmapGame.memory;
+    Pixel* bitmapMemory = (Pixel*)Bitmap.Memory;
     for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
         bitmapMemory[i] = pixel;
     }
 
     HDC graphicsContext = GetDC(hwnd);
-    StretchDIBits(graphicsContext, 0, 0, monitorWidth, monitorHeight, 0, 0,
-        SCREEN_WIDTH, SCREEN_HEIGHT, bitmapGame.memory, &bitmapGame.bmpInfo, DIB_RGB_COLORS, SRCCOPY);
-    if (fps.debuginfopress) {
-        SetTextColor(graphicsContext, RGB(255, 255, 255)); // White text
-        SetBkMode(graphicsContext, TRANSPARENT); // Transparent background
-
+    StretchDIBits(graphicsContext, 0, 0, MonitorData.MonitorWidth, MonitorData.MonitorHeight, 0, 0,
+        SCREEN_WIDTH, SCREEN_HEIGHT, Bitmap.Memory, &Bitmap.bmpInfo, DIB_RGB_COLORS, SRCCOPY);
+    if (MonitorData.DebugInformationAboutFPS) {
         char str[64] = { 0 };
-        sprintf_s(str, sizeof(str), "AVG FPS Raw: %.01f\n", fps.fpsAverage);
+        sprintf_s(str, sizeof(str), "AVG FPS Raw: %.01f\n", MonitorData.FpsAveragePerSecond);
         TextOutA(graphicsContext, 0, 0, str, (int)strlen(str));
 
-        sprintf_s(str, sizeof(str), "FPS Cooked: %.01f\n", fps.fpsAverageCooked);
+        sprintf_s(str, sizeof(str), "FPS Cooked: %.01f\n", MonitorData.FpsAverageCookedPerSecond);
         TextOutA(graphicsContext, 0, 16, str, (int)strlen(str));
     }
   
