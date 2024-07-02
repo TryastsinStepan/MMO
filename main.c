@@ -2,7 +2,7 @@
 #include <wchar.h>
 #include <stdio.h>
 #include <stdint.h>
-
+#include <emmintrin.h>
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     HWND hwnd = NULL;
     int64_t ElapsedMicroseconds = 0;
@@ -65,7 +65,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
 
     Bitmap.bmpInfo.bmiHeader.biSize = sizeof(Bitmap.bmpInfo.bmiHeader);
     Bitmap.bmpInfo.bmiHeader.biWidth = SCREEN_WIDTH;
-    Bitmap.bmpInfo.bmiHeader.biHeight = -SCREEN_HEIGHT;
+    Bitmap.bmpInfo.bmiHeader.biHeight = SCREEN_HEIGHT;
     Bitmap.bmpInfo.bmiHeader.biPlanes = 1;
     Bitmap.bmpInfo.bmiHeader.biBitCount = BITCOUNT;
     Bitmap.bmpInfo.bmiHeader.biCompression = BI_RGB;
@@ -171,12 +171,22 @@ void ProcessInput(HWND hwnd) {
 }
 void RenderFrame(HWND hwnd) {
     char str[64] = { 0 };
-    Pixel pixel = { 0xFF, 0, 0, 0 };
-    Pixel* bitmapMemory = (Pixel*)Bitmap.Memory;
-    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-        bitmapMemory[i] = pixel;
+    __m128i pixel = { 0xFF, 0x00, 0x00, 0xFF,
+                      0xFF, 0x00, 0x00, 0xFF,
+                      0xFF, 0x00, 0x00, 0xFF,
+                      0xFF, 0x00, 0x00, 0xFF};
+    void ClearBuffer(pixel);
+    int32_t ScreenX = 25;
+    int32_t ScreenY = 25;
+    int32_t Position = ((SCREEN_HEIGHT * SCREEN_WIDTH) - SCREEN_WIDTH) - 
+                              (SCREEN_WIDTH * ScreenY) + ScreenX;
+    for (size_t y = 0; y < 16; y++)
+    {
+        for (size_t x = 0; x < 16; x++)
+        {
+            memset((Pixel*)Bitmap.Memory + Position + x - (SCREEN_WIDTH * y),0xFF,sizeof(Pixel));
+        }
     }
-
     HDC graphicsContext = GetDC(hwnd);
     StretchDIBits(graphicsContext, 0, 0, MonitorData.MonitorWidth, MonitorData.MonitorHeight, 0, 0,
         SCREEN_WIDTH, SCREEN_HEIGHT, Bitmap.Memory, &Bitmap.bmpInfo, DIB_RGB_COLORS, SRCCOPY);
@@ -199,4 +209,11 @@ void RenderFrame(HWND hwnd) {
   
 
     ReleaseDC(hwnd, graphicsContext);
+}
+
+void ClearBuffer(_In_ __m128i pixel)
+{
+    for (int i = 0; i < SCREEN_HEIGHT * SCREEN_WIDTH; i += 4) {
+        _mm_store_si128((Pixel*)Bitmap.Memory + i, pixel);
+    }
 }

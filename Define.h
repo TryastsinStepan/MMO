@@ -1,7 +1,8 @@
 #pragma once
 #include<Windows.h>
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 600
+#include <emmintrin.h>
+#define SCREEN_WIDTH 380
+#define SCREEN_HEIGHT 240
 #define BITCOUNT 32
 #define GAME_MEMORY_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT * (BITCOUNT / 8))
 #define TARGET_FPS 60
@@ -46,7 +47,7 @@ NTQUERYTIMERRESOLUTION  NtQueryTimerResolution;
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void ProcessInput(HWND hwnd);
 void RenderFrame(HWND hwnd);
-
+void ClearBuffer(_In_ __m128i pixel);
 const wchar_t CLASS_NAME[] = L"SampleWindowClass";
 HMODULE NtDll;
 BitmapGame Bitmap = { 0 };
